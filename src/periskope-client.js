@@ -9,12 +9,13 @@ class PeriskopeClient {
     // Initialize the official Periskope client
     this.client = new PeriskopeApi({
       authToken: process.env.PERISKOPE_API_KEY,
-      phone: process.env.PERISKOPE_PHONE_NUMBER, // Use phone number, not phone ID
+      phone: process.env.PERISKOPE_PHONE_NUMBER,
     });
   }
 
   async sendMessage(chatId, message) {
     try {
+      // Based on the API examples, use message.send
       const response = await this.client.message.send({
         chat_id: chatId,
         message: message
@@ -26,10 +27,19 @@ class PeriskopeClient {
     }
   }
 
-  async getChats() {
+  async sendMessageDirect(chatId, message) {
+    // Fallback method for direct sending
+    return this.sendMessage(chatId, message);
+  }
+
+  async getChats(chatType = null) {
     try {
-      // The API might use a different method name
-      const response = await this.client.chat.list();
+      // Based on API examples, use chat.getChats()
+      const params = {};
+      if (chatType) {
+        params.chat_type = chatType;
+      }
+      const response = await this.client.chat.getChats(params);
       return { success: true, data: response };
     } catch (error) {
       console.error('Failed to get chats:', error);
@@ -37,8 +47,46 @@ class PeriskopeClient {
     }
   }
 
+  async getChatById(chatId) {
+    try {
+      // Based on API examples
+      const response = await this.client.chat.getChatById({
+        chat_id: chatId
+      });
+      return { success: true, data: response };
+    } catch (error) {
+      console.error('Failed to get chat by ID:', error);
+      throw error;
+    }
+  }
+
+  async getChatMessages(chatId) {
+    try {
+      // Based on API examples
+      const response = await this.client.chat.getChatMessages({
+        chat_id: chatId
+      });
+      return { success: true, data: response };
+    } catch (error) {
+      console.error('Failed to get chat messages:', error);
+      throw error;
+    }
+  }
+
+  async getAllMessages() {
+    try {
+      // Based on API examples
+      const response = await this.client.chat.getMessages();
+      return { success: true, data: response };
+    } catch (error) {
+      console.error('Failed to get all messages:', error);
+      throw error;
+    }
+  }
+
   async createGroup(name, members) {
     try {
+      // This might need to be adjusted based on actual API
       const response = await this.client.group.create({
         name: name,
         members: members
@@ -46,24 +94,14 @@ class PeriskopeClient {
       return { success: true, data: response };
     } catch (error) {
       console.error('Failed to create group:', error);
-      throw error;
-    }
-  }
-
-  async getTickets() {
-    try {
-      // Try different possible method names
-      const response = await this.client.ticket.list();
-      return { success: true, data: response };
-    } catch (error) {
-      console.error('Failed to get tickets:', error);
+      // If group.create doesn't exist, try alternative approach
       throw error;
     }
   }
 
   // Alternative method using direct API calls if client library doesn't work
   async makeDirectAPICall(endpoint, method = 'GET', data = null) {
-    const baseUrl = 'https://api.periskope.app/v1'; // Common API pattern
+    const baseUrl = 'https://api.periskope.app/v1';
     const url = `${baseUrl}${endpoint}`;
     
     const headers = {

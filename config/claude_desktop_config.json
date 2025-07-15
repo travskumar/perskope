@@ -3,7 +3,7 @@
     "periskope-mcp": {
       "command": "node",
       "args": ["src/mcp-server.js"],
-      "cwd": "/path/to/your/periskope-mcp-integration",
+      "cwd": "/home/travclan/Desktop/periskope-anthropic",
       "env": {
         "PERISKOPE_API_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCIgOiAiODM0YThkZWMtZDBhNi00ZjUyLThhZWMtYzRlNjdjNDk0NDgxIiwgInJvbGUiIDogImFwaSIsICJ0eXBlIiA6ICJhcGkiLCAibmFtZSIgOiAidGVzdCIsICJleHAiIDogMjA2ODEwNzAxMCwgImlhdCIgOiAxNzUyNTc0MjEwLCAic3ViIiA6ICIzM2ExOWMyOC03MzFkLTRiZDYtOWUwYy01NDQ2NzM0ZGE5M2UiLCAiaXNzIiA6ICJwZXJpc2tvcGUuYXBwIiwgIm1ldGFkYXRhIiA6IHt9fQ.kBZ1ulGvVWdN7HDbjlPsT-5zcpF1auxbMr9xfnQCNnU",
         "PERISKOPE_PHONE_ID": "phone-zjtmsgyovcpvmizi",

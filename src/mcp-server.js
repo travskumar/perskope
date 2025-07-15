@@ -39,7 +39,7 @@ class PeriskopeMCPServer {
               properties: {
                 chat_id: {
                   type: 'string',
-                  description: 'WhatsApp chat ID (e.g., 917060284729@c.us for individual, or group ID)',
+                  description: 'WhatsApp chat ID (e.g., 917060284729@c.us for individual, or 120363373936603867@g.us for group)',
                 },
                 message: {
                   type: 'string',
@@ -52,6 +52,48 @@ class PeriskopeMCPServer {
           {
             name: 'get_whatsapp_chats',
             description: 'Get all WhatsApp chats and conversations',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                chat_type: {
+                  type: 'string',
+                  description: 'Filter by chat type: "user" for individual chats, "group" for group chats, or leave empty for all',
+                  enum: ['user', 'group'],
+                },
+              },
+            },
+          },
+          {
+            name: 'get_chat_details',
+            description: 'Get detailed information about a specific chat',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                chat_id: {
+                  type: 'string',
+                  description: 'WhatsApp chat ID to get details for',
+                },
+              },
+              required: ['chat_id'],
+            },
+          },
+          {
+            name: 'get_chat_messages',
+            description: 'Get messages from a specific chat',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                chat_id: {
+                  type: 'string',
+                  description: 'WhatsApp chat ID to get messages from',
+                },
+              },
+              required: ['chat_id'],
+            },
+          },
+          {
+            name: 'get_all_messages',
+            description: 'Get all recent messages across all chats',
             inputSchema: {
               type: 'object',
               properties: {},
@@ -70,7 +112,7 @@ class PeriskopeMCPServer {
                 members: {
                   type: 'array',
                   items: { type: 'string' },
-                  description: 'Array of phone numbers to add to the group',
+                  description: 'Array of phone numbers to add to the group (format: 919537851844@c.us)',
                 },
               },
               required: ['name', 'members'],
@@ -87,7 +129,7 @@ class PeriskopeMCPServer {
       try {
         switch (name) {
           case 'send_whatsapp_message':
-            const messageResult = await this.periskopeClient.sendMessageDirect(
+            const messageResult = await this.periskopeClient.sendMessage(
               args.chat_id,
               args.message
             );
@@ -101,12 +143,51 @@ class PeriskopeMCPServer {
             };
 
           case 'get_whatsapp_chats':
-            const chatsResult = await this.periskopeClient.getChats();
+            const chatsResult = await this.periskopeClient.getChats(args.chat_type);
+            const chats = chatsResult.data?.chats || [];
+            const chatList = chats.map(chat => 
+              `- ${chat.chat_name} (${chat.chat_id}) - Type: ${chat.chat_type}`
+            ).join('\n');
             return {
               content: [
                 {
                   type: 'text',
-                  text: `📱 WhatsApp Chats:\n\n${JSON.stringify(chatsResult, null, 2)}`,
+                  text: `📱 WhatsApp Chats (${chats.length} total):\n\n${chatList}\n\nFull data:\n${JSON.stringify(chatsResult, null, 2)}`,
+                },
+              ],
+            };
+
+          case 'get_chat_details':
+            const chatDetails = await this.periskopeClient.getChatById(args.chat_id);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `📋 Chat Details for ${args.chat_id}:\n\n${JSON.stringify(chatDetails, null, 2)}`,
+                },
+              ],
+            };
+
+          case 'get_chat_messages':
+            const messages = await this.periskopeClient.getChatMessages(args.chat_id);
+            const messageCount = messages.data?.messages?.length || messages.data?.count || 0;
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `💬 Messages from ${args.chat_id} (${messageCount} messages):\n\n${JSON.stringify(messages, null, 2)}`,
+                },
+              ],
+            };
+
+          case 'get_all_messages':
+            const allMessages = await this.periskopeClient.getAllMessages();
+            const totalMessages = allMessages.data?.messages?.length || allMessages.data?.count || 0;
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `📨 All Recent Messages (${totalMessages} total):\n\n${JSON.stringify(allMessages, null, 2)}`,
                 },
               ],
             };
@@ -133,7 +214,7 @@ class PeriskopeMCPServer {
           content: [
             {
               type: 'text',
-              text: `❌ Error executing ${name}: ${error.message}`,
+              text: `❌ Error executing ${name}: ${error.message}\n\nFull error: ${JSON.stringify(error, null, 2)}`,
             },
           ],
           isError: true,

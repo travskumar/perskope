@@ -19,70 +19,104 @@ async function testConnection() {
     return;
   }
   
-  // Test 2: Test send message using official client
-  console.log('\n📱 Testing send message with official client...');
+  // Test 2: Get all chats first to see what's available
+  console.log('\n📱 Testing get all chats...');
   try {
-    const messageResult = await client.sendMessage('917060284729@c.us', 'Test message from Periskope MCP');
-    console.log('✅ Message sent successfully:', messageResult);
-  } catch (error) {
-    console.log('⚠️ Official client failed:', error.message);
+    const chats = await client.getChats();
+    console.log('✅ Chats retrieved successfully:');
+    console.log('Raw response:', JSON.stringify(chats, null, 2));
     
-    // Test 3: Fallback to direct API call
-    console.log('\n🔄 Trying direct API call...');
-    try {
-      const directResult = await client.makeDirectAPICall('/messages', 'POST', {
-        chat_id: '917060284729@c.us',
-        message: 'Test message from direct API'
+    // Try different ways to access the data
+    const chatList = chats.data?.chats || chats.chats || chats.data || [];
+    const chatCount = chatList.length || chats.data?.count || chats.count || 'Unknown';
+    console.log(`- Total chats: ${chatCount}`);
+    
+    // Show first few chats
+    if (Array.isArray(chatList) && chatList.length > 0) {
+      console.log('\nFirst 3 chats:');
+      chatList.slice(0, 3).forEach(chat => {
+        console.log(`  - ${chat.chat_name} (${chat.chat_id}) - Type: ${chat.chat_type}`);
       });
+      
+      // Store first chat ID for testing
+      const firstChatId = chatList[0].chat_id;
+      
+      // Test 3: Send message to first available chat
+      console.log(`\n📨 Testing send message to ${firstChatId}...`);
+      try {
+        const messageResult = await client.sendMessage(firstChatId, 'Test message from Periskope MCP Integration');
+        console.log('✅ Message sent successfully:', messageResult);
+      } catch (error) {
+        console.log('❌ Send message failed:', error.message);
+      }
+      
+      // Test 4: Get specific chat details
+      console.log(`\n🔍 Testing get chat by ID for ${firstChatId}...`);
+      try {
+        const chatDetails = await client.getChatById(firstChatId);
+        console.log('✅ Chat details retrieved:', {
+          name: chatDetails.data?.chat_name,
+          type: chatDetails.data?.chat_type,
+          memberCount: chatDetails.data?.member_count
+        });
+      } catch (error) {
+        console.log('❌ Get chat by ID failed:', error.message);
+      }
+      
+      // Test 5: Get chat messages
+      console.log(`\n💬 Testing get chat messages for ${firstChatId}...`);
+      try {
+        const messages = await client.getChatMessages(firstChatId);
+        console.log('✅ Messages retrieved:', {
+          count: messages.data?.messages?.length || messages.data?.count || 'Unknown',
+          from: messages.data?.from,
+          to: messages.data?.to
+        });
+      } catch (error) {
+        console.log('❌ Get chat messages failed:', error.message);
+      }
+    }
+  } catch (error) {
+    console.log('❌ Get chats failed:', error.message);
+    
+    // If official client fails, try direct API
+    console.log('\n🔄 Trying direct API call to get chats...');
+    try {
+      const directResult = await client.makeDirectAPICall('/chats', 'GET');
       console.log('✅ Direct API call successful:', directResult);
     } catch (directError) {
       console.log('❌ Direct API call also failed:', directError.message);
-      
-      // Test 4: Try different endpoints
-      console.log('\n🔍 Testing different API endpoints...');
-      const endpoints = [
-        'https://api.periskope.app/v1/messages',
-        'https://api.periskope.app/messages',
-        'https://console.periskope.app/api/v1/messages',
-        'https://console.periskope.app/api/messages'
-      ];
-      
-      for (const endpoint of endpoints) {
-        try {
-          const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${process.env.PERISKOPE_API_KEY}`,
-              'Content-Type': 'application/json',
-              'x-phone': process.env.PERISKOPE_PHONE_NUMBER
-            },
-            body: JSON.stringify({
-              chat_id: '917060284729@c.us',
-              message: 'Test message'
-            })
-          });
-          
-          if (response.ok) {
-            const result = await response.json();
-            console.log(`✅ Success with endpoint: ${endpoint}`, result);
-            break;
-          } else {
-            console.log(`❌ Failed with endpoint: ${endpoint} - Status: ${response.status}`);
-          }
-        } catch (endpointError) {
-          console.log(`❌ Error with endpoint: ${endpoint} - ${endpointError.message}`);
-        }
-      }
     }
   }
   
-  // Test 5: Test get chats
-  console.log('\n📱 Testing get chats...');
+  // Test 6: Get only group chats
+  console.log('\n👥 Testing get group chats...');
   try {
-    const chats = await client.getChats();
-    console.log('✅ Chats retrieved:', chats.data?.length || 'No length property');
+    const groups = await client.getChats('group');
+    console.log('✅ Group chats retrieved:', groups.data?.chats?.length || groups.data?.count || 'Unknown');
   } catch (error) {
-    console.log('⚠️ Get chats failed:', error.message);
+    console.log('❌ Get group chats failed:', error.message);
+  }
+  
+  // Test 7: Get all messages
+  console.log('\n📨 Testing get all messages...');
+  try {
+    const allMessages = await client.getAllMessages();
+    console.log('✅ All messages retrieved:', {
+      count: allMessages.data?.messages?.length || allMessages.data?.count || 'Unknown'
+    });
+  } catch (error) {
+    console.log('❌ Get all messages failed:', error.message);
+  }
+  
+  // Test 8: Send a test message to your specified chat ID
+  console.log('\n📤 Testing send message to 917060284729@c.us...');
+  try {
+    const testMessage = await client.sendMessage('917060284729@c.us', 'Hello from Periskope MCP! This is a test message.');
+    console.log('✅ Test message sent successfully:', testMessage);
+  } catch (error) {
+    console.log('❌ Failed to send test message:', error.message);
+    console.log('Full error:', error);
   }
   
   console.log('\n🏁 Connection test completed.');
