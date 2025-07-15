@@ -33,70 +33,88 @@ class PeriskopeMCPServer {
         tools: [
           {
             name: 'send_whatsapp_message',
-            description: 'Send a WhatsApp message to a specific chat or person',
+            description: 'Send a WhatsApp message to a specific contact or group',
             inputSchema: {
               type: 'object',
               properties: {
-                chat_id: {
+                to: {
                   type: 'string',
-                  description: 'WhatsApp chat ID (e.g., 917060284729@c.us for individual, or 120363373936603867@g.us for group)',
+                  description: 'Phone number (format: 917060284729) or chat ID (917060284729@c.us)',
                 },
                 message: {
                   type: 'string',
                   description: 'The message content to send',
                 },
               },
-              required: ['chat_id', 'message'],
+              required: ['to', 'message'],
+            },
+          },
+          {
+            name: 'send_whatsapp_media',
+            description: 'Send an image or document via WhatsApp',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                to: {
+                  type: 'string',
+                  description: 'Phone number or chat ID',
+                },
+                media_url: {
+                  type: 'string',
+                  description: 'URL of the media file to send',
+                },
+                caption: {
+                  type: 'string',
+                  description: 'Optional caption for the media',
+                },
+              },
+              required: ['to', 'media_url'],
             },
           },
           {
             name: 'get_whatsapp_chats',
-            description: 'Get all WhatsApp chats and conversations',
+            description: 'Get list of WhatsApp chats',
             inputSchema: {
               type: 'object',
               properties: {
                 chat_type: {
                   type: 'string',
-                  description: 'Filter by chat type: "user" for individual chats, "group" for group chats, or leave empty for all',
-                  enum: ['user', 'group'],
+                  description: 'Filter by type: user, group, or all',
+                  enum: ['user', 'group', 'all'],
                 },
               },
-            },
-          },
-          {
-            name: 'get_chat_details',
-            description: 'Get detailed information about a specific chat',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                chat_id: {
-                  type: 'string',
-                  description: 'WhatsApp chat ID to get details for',
-                },
-              },
-              required: ['chat_id'],
             },
           },
           {
             name: 'get_chat_messages',
-            description: 'Get messages from a specific chat',
+            description: 'Get recent messages from a specific chat',
             inputSchema: {
               type: 'object',
               properties: {
                 chat_id: {
                   type: 'string',
-                  description: 'WhatsApp chat ID to get messages from',
+                  description: 'Chat ID to get messages from',
+                },
+                limit: {
+                  type: 'number',
+                  description: 'Number of messages to retrieve (default: 50)',
                 },
               },
               required: ['chat_id'],
             },
           },
           {
-            name: 'get_all_messages',
-            description: 'Get all recent messages across all chats',
+            name: 'get_contact_info',
+            description: 'Get information about a WhatsApp contact',
             inputSchema: {
               type: 'object',
-              properties: {},
+              properties: {
+                phone_number: {
+                  type: 'string',
+                  description: 'Phone number to look up (format: 917060284729)',
+                },
+              },
+              required: ['phone_number'],
             },
           },
           {
@@ -107,12 +125,12 @@ class PeriskopeMCPServer {
               properties: {
                 name: {
                   type: 'string',
-                  description: 'Name of the group to create',
+                  description: 'Name for the new group',
                 },
                 members: {
                   type: 'array',
                   items: { type: 'string' },
-                  description: 'Array of phone numbers to add to the group (format: 919537851844@c.us)',
+                  description: 'Phone numbers to add (format: ["917060284729", "919876543210"])',
                 },
               },
               required: ['name', 'members'],
@@ -128,93 +146,164 @@ class PeriskopeMCPServer {
 
       try {
         switch (name) {
-          case 'send_whatsapp_message':
-            const messageResult = await this.periskopeClient.sendMessage(
-              args.chat_id,
-              args.message
+          case 'send_whatsapp_message': {
+            // Format the recipient ID properly
+            let chatId = args.to;
+            if (!chatId.includes('@')) {
+              chatId = `${chatId}@c.us`;
+            }
+            
+            const result = await this.periskopeClient.sendMessage(chatId, args.message);
+            
+            if (result.success) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `✅ Message sent successfully to ${args.to}!\n\nMessage: "${args.message}"`,
+                  },
+                ],
+              };
+            } else {
+              throw new Error('Failed to send message');
+            }
+          }
+
+          case 'send_whatsapp_media': {
+            let chatId = args.to;
+            if (!chatId.includes('@')) {
+              chatId = `${chatId}@c.us`;
+            }
+            
+            const result = await this.periskopeClient.sendMedia(
+              chatId, 
+              args.media_url, 
+              args.caption || ''
             );
+            
             return {
               content: [
                 {
                   type: 'text',
-                  text: `✅ Message sent successfully!\n\nChat ID: ${args.chat_id}\nMessage: "${args.message}"\n\nResponse: ${JSON.stringify(messageResult, null, 2)}`,
+                  text: `📷 Media sent successfully to ${args.to}!\n\nMedia URL: ${args.media_url}\nCaption: "${args.caption || 'No caption'}"`,
                 },
               ],
             };
+          }
 
-          case 'get_whatsapp_chats':
-            const chatsResult = await this.periskopeClient.getChats(args.chat_type);
-            const chats = chatsResult.data?.chats || [];
-            const chatList = chats.map(chat => 
-              `- ${chat.chat_name} (${chat.chat_id}) - Type: ${chat.chat_type}`
+          case 'get_whatsapp_chats': {
+            const chatType = args.chat_type === 'all' ? null : args.chat_type;
+            const result = await this.periskopeClient.getChats(chatType);
+            
+            // Extract chats from various possible response formats
+            const chats = result.data?.chats || result.data || [];
+            const chatList = Array.isArray(chats) ? chats : [];
+            
+            if (chatList.length === 0) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: '📱 No chats found or unable to retrieve chats.',
+                  },
+                ],
+              };
+            }
+            
+            const formattedChats = chatList.map(chat => 
+              `• ${chat.chat_name || 'Unknown'} (${chat.chat_id}) - ${chat.chat_type}`
             ).join('\n');
+            
             return {
               content: [
                 {
                   type: 'text',
-                  text: `📱 WhatsApp Chats (${chats.length} total):\n\n${chatList}\n\nFull data:\n${JSON.stringify(chatsResult, null, 2)}`,
+                  text: `📱 WhatsApp Chats (${chatList.length} total):\n\n${formattedChats}`,
                 },
               ],
             };
+          }
 
-          case 'get_chat_details':
-            const chatDetails = await this.periskopeClient.getChatById(args.chat_id);
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `📋 Chat Details for ${args.chat_id}:\n\n${JSON.stringify(chatDetails, null, 2)}`,
-                },
-              ],
-            };
-
-          case 'get_chat_messages':
-            const messages = await this.periskopeClient.getChatMessages(args.chat_id);
-            const messageCount = messages.data?.messages?.length || messages.data?.count || 0;
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `💬 Messages from ${args.chat_id} (${messageCount} messages):\n\n${JSON.stringify(messages, null, 2)}`,
-                },
-              ],
-            };
-
-          case 'get_all_messages':
-            const allMessages = await this.periskopeClient.getAllMessages();
-            const totalMessages = allMessages.data?.messages?.length || allMessages.data?.count || 0;
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `📨 All Recent Messages (${totalMessages} total):\n\n${JSON.stringify(allMessages, null, 2)}`,
-                },
-              ],
-            };
-
-          case 'create_whatsapp_group':
-            const groupResult = await this.periskopeClient.createGroup(
-              args.name,
-              args.members
+          case 'get_chat_messages': {
+            const result = await this.periskopeClient.getChatMessages(
+              args.chat_id, 
+              args.limit || 50
             );
+            
+            const messages = result.data?.messages || [];
+            const messageCount = messages.length;
+            
+            if (messageCount === 0) {
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: `💬 No messages found in chat ${args.chat_id}`,
+                  },
+                ],
+              };
+            }
+            
+            const formattedMessages = messages.slice(0, 10).map(msg => {
+              const sender = msg.from_me ? 'You' : msg.sender_phone || 'Unknown';
+              const time = new Date(msg.timestamp).toLocaleString();
+              return `[${time}] ${sender}: ${msg.body || '[Media]'}`;
+            }).join('\n');
+            
             return {
               content: [
                 {
                   type: 'text',
-                  text: `👥 Group "${args.name}" created successfully!\n\nMembers: ${args.members.join(', ')}\n\nResponse: ${JSON.stringify(groupResult, null, 2)}`,
+                  text: `💬 Recent messages from ${args.chat_id} (showing ${Math.min(10, messageCount)} of ${messageCount}):\n\n${formattedMessages}`,
                 },
               ],
             };
+          }
+
+          case 'get_contact_info': {
+            const result = await this.periskopeClient.getContact(args.phone_number);
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `👤 Contact Information:\n\nPhone: ${args.phone_number}\nDetails: ${JSON.stringify(result.data, null, 2)}`,
+                },
+              ],
+            };
+          }
+
+          case 'create_whatsapp_group': {
+            // Format member phone numbers
+            const formattedMembers = args.members.map(member => 
+              member.includes('@') ? member : `${member}@c.us`
+            );
+            
+            const result = await this.periskopeClient.createGroup(
+              args.name,
+              formattedMembers
+            );
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `👥 Group "${args.name}" created successfully!\n\nMembers added: ${args.members.join(', ')}`,
+                },
+              ],
+            };
+          }
 
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
       } catch (error) {
+        console.error(`Error in ${name}:`, error);
         return {
           content: [
             {
               type: 'text',
-              text: `❌ Error executing ${name}: ${error.message}\n\nFull error: ${JSON.stringify(error, null, 2)}`,
+              text: `❌ Error: ${error.message}\n\nPlease check the format and try again.`,
             },
           ],
           isError: true,
@@ -230,5 +319,6 @@ class PeriskopeMCPServer {
   }
 }
 
+// Start the server
 const server = new PeriskopeMCPServer();
 server.run().catch(console.error);
